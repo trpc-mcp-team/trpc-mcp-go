@@ -1,0 +1,268 @@
+package e2e
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"trpc.group/trpc-go/trpc-mcp-go/mcp"
+	"trpc.group/trpc-go/trpc-mcp-go/server"
+	"trpc.group/trpc-go/trpc-mcp-go/transport"
+)
+
+// ServerOption defines a server option function.
+type ServerOption func(*server.Server)
+
+// WithTestTools option: register test tools.
+func WithTestTools() ServerOption {
+	return func(s *server.Server) {
+		// Register test tools.
+		RegisterTestTools(s)
+	}
+}
+
+// WithCustomPathPrefix option: set custom path prefix.
+func WithCustomPathPrefix(prefix string) ServerOption {
+	return func(s *server.Server) {
+		// Already applied at instantiation, this is just a placeholder.
+	}
+}
+
+// WithServerOptions option: set multiple server options.
+func WithServerOptions(opts ...server.ServerOption) ServerOption {
+	return func(s *server.Server) {
+		for _, opt := range opts {
+			opt(s)
+		}
+	}
+}
+
+// StartTestServer starts a test server and returns its URL and cleanup function.
+func StartTestServer(t *testing.T, opts ...ServerOption) (string, func()) {
+	t.Helper()
+
+	// Create basic server config.
+	pathPrefix := "/mcp"
+
+	// Instantiate server.
+	s := server.NewServer("", mcp.Implementation{
+		Name:    "E2E-Test-Server",
+		Version: "1.0.0",
+	}, server.WithPathPrefix(pathPrefix))
+
+	// Apply options.
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	// Create HTTP test server.
+	httpServer := httptest.NewServer(s.HTTPHandler())
+	serverURL := httpServer.URL + pathPrefix
+
+	t.Logf("Started test server URL: %s", serverURL)
+
+	// Return cleanup function.
+	cleanup := func() {
+		t.Log("Closing test server.")
+		httpServer.Close()
+	}
+
+	return serverURL, cleanup
+}
+
+// StartSSETestServer starts a test server with SSE enabled, returns its URL and cleanup function.
+func StartSSETestServer(t *testing.T, opts ...ServerOption) (string, func()) {
+	t.Helper()
+
+	// Create basic server config.
+	pathPrefix := "/mcp"
+
+	// Create session manager.
+	sessionManager := transport.NewSessionManager(3600)
+
+	// Instantiate server and enable SSE.
+	s := server.NewServer("", mcp.Implementation{
+		Name:    "E2E-SSE-Test-Server",
+		Version: "1.0.0",
+	},
+		server.WithPathPrefix(pathPrefix),
+		server.WithSessionManager(sessionManager),
+		server.WithSSEEnabled(true),           // Enable SSE.
+		server.WithGetSSEEnabled(true),        // Enable GET SSE.
+		server.WithDefaultResponseMode("sse"), // Set default response mode to SSE.
+	)
+
+	// Apply options.
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	// Create HTTP handler.
+	httpHandler := transport.NewHTTPServerHandler(
+		s.MCPHandler(),
+		transport.WithSessionManager(sessionManager),
+		transport.WithServerSSEEnabled(true),
+		transport.WithGetSSEEnabled(true),
+		transport.WithServerDefaultResponseMode("sse"),
+	)
+
+	// Create custom mux for test routes.
+	mux := http.NewServeMux()
+
+	// Register MCP path.
+	mux.Handle(pathPrefix, httpHandler)
+
+	// Register test notification path.
+	mux.HandleFunc(pathPrefix+"/test/notify", func(w http.ResponseWriter, r *http.Request) {
+		handleTestNotify(w, r, httpHandler)
+	})
+
+	// Create HTTP test server.
+	httpServer := httptest.NewServer(mux)
+	serverURL := httpServer.URL + pathPrefix
+
+	t.Logf("Started SSE test server URL: %s", serverURL)
+
+	// Return cleanup function.
+	cleanup := func() {
+		t.Log("Closing SSE test server.")
+		httpServer.Close()
+	}
+
+	return serverURL, cleanup
+}
+
+// handleTestNotify handles the test endpoint for sending notifications.
+func handleTestNotify(w http.ResponseWriter, r *http.Request, httpHandler *transport.HTTPServerHandler) {
+	// Get target session ID.
+	sessionID := r.URL.Query().Get("sessionId")
+	if sessionID == "" {
+		http.Error(w, "Missing sessionId parameter.", http.StatusBadRequest)
+		return
+	}
+
+	// Parse notification content.
+	var notification mcp.JSONRPCNotification
+	if err := json.NewDecoder(r.Body).Decode(&notification); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid notification format: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Use HTTPServerHandler to send notification directly.
+	if err := httpHandler.SendNotification(sessionID, &notification); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to send notification: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Return success.
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// StartLocalTestServer starts a server on a real port.
+// Suitable for tests that require real network communication.
+func StartLocalTestServer(t *testing.T, addr string, opts ...ServerOption) (*server.Server, func()) {
+	t.Helper()
+
+	// Create server.
+	s := server.NewServer(addr, mcp.Implementation{
+		Name:    "E2E-Test-Server",
+		Version: "1.0.0",
+	}, server.WithPathPrefix("/mcp"))
+
+	// Apply options.
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	// Start server.
+	go func() {
+		if err := s.Start(); err != nil {
+			log.Printf("Server closed: %v", err)
+		}
+	}()
+
+	t.Logf("Started local test server at: %s", addr)
+
+	// Return cleanup function.
+	cleanup := func() {
+		t.Log("Closing local test server.")
+		// Server does not provide a Close method, but Start returns when server is closed.
+		// No need to close explicitly here, as httptest.Server's Close will handle it.
+	}
+
+	return s, cleanup
+}
+
+// ServerNotifier is a server notification sender for testing.
+type ServerNotifier interface {
+	// SendNotification sends a notification.
+	SendNotification(sessionID string, notification *mcp.JSONRPCNotification) error
+}
+
+// GetServerNotifier gets a test server's notification sender.
+func GetServerNotifier(t *testing.T, serverURL string) ServerNotifier {
+	t.Helper()
+
+	// Parse URL and create a new client pointing to the same server.
+	// This client is only used to call the notification API and does not establish a real connection.
+	return NewTestServerNotifier(t, serverURL)
+}
+
+// TestServerNotifier implements the ServerNotifier interface for testing.
+type TestServerNotifier struct {
+	t         *testing.T
+	serverURL string
+	client    *http.Client
+}
+
+// NewTestServerNotifier creates a new test server notification sender.
+func NewTestServerNotifier(t *testing.T, serverURL string) *TestServerNotifier {
+	return &TestServerNotifier{
+		t:         t,
+		serverURL: serverURL,
+		client:    &http.Client{},
+	}
+}
+
+// SendNotification sends a notification.
+func (n *TestServerNotifier) SendNotification(sessionID string, notification *mcp.JSONRPCNotification) error {
+	n.t.Helper()
+
+	// Create POST request to send notification to server.
+	notificationBytes, err := json.Marshal(notification)
+	if err != nil {
+		return fmt.Errorf("failed to marshal notification: %v", err)
+	}
+
+	// Build request URL.
+	reqURL := fmt.Sprintf("%s/test/notify?sessionId=%s", n.serverURL, sessionID)
+
+	// Create request.
+	req, err := http.NewRequest(http.MethodPost, reqURL, bytes.NewReader(notificationBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	// Set request header.
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request.
+	resp, err := n.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check status code.
+	if resp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server returned non-200 status code: %d, response body: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
