@@ -160,6 +160,22 @@ func WithNumber(name string, opts ...PropertyOption) ToolOption {
 	}
 }
 
+// WithInteger adds an integer parameter to the tool's input schema
+func WithInteger(name string, opts ...PropertyOption) ToolOption {
+	return func(t *Tool) {
+		schema := &openapi3.Schema{
+			Type: &openapi3.Types{openapi3.TypeInteger},
+		}
+		for _, opt := range opts {
+			opt(schema)
+		}
+		t.InputSchema.Properties[name] = openapi3.NewSchemaRef("", schema)
+		if schema.Required != nil && len(schema.Required) > 0 {
+			t.InputSchema.Required = append(t.InputSchema.Required, name)
+		}
+	}
+}
+
 // WithBoolean adds a boolean parameter to the tool's input schema
 func WithBoolean(name string, opts ...PropertyOption) ToolOption {
 	return func(t *Tool) {
