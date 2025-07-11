@@ -18,6 +18,12 @@ type HTTPReqHandler interface {
 	Handle(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error)
 }
 
+// NewHTTPReqHandler returns a new default HTTP request handler.
+// This can be replaced by internal implementations to customize HTTP request handling.
+var NewHTTPReqHandler = func() HTTPReqHandler {
+	return NewDefaultHTTPReqHandler()
+}
+
 // defaultHTTPReqHandler is the default implementation of HTTPReqHandler
 type defaultHTTPReqHandler struct{}
 
