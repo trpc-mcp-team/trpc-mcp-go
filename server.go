@@ -72,6 +72,12 @@ type Server struct {
 	resourceManager *resourceManager   // Resource manager.
 	promptManager   *promptManager     // Prompt manager.
 	customServer    *http.Server       // Custom HTTP server.
+	middlewares     []MiddlewareFunc   // Middlewares.
+}
+
+// Use adds a middleware to the server's middleware chain.
+func (s *Server) Use(m MiddlewareFunc) {
+	s.middlewares = append(s.middlewares, m)
 }
 
 // NewServer creates a new MCP server
@@ -143,6 +149,7 @@ func (s *Server) initComponents() {
 
 	// Create MCP handler.
 	s.mcpHandler = newMCPHandler(
+		withServer(s),
 		withToolManager(s.toolManager),
 		withLifecycleManager(lifecycleManager),
 		withResourceManager(s.resourceManager),

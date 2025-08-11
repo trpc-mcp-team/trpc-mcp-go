@@ -39,6 +39,9 @@ type mcpHandler struct {
 
 	// Prompt manager
 	promptManager *promptManager
+
+	// Server instance
+	server *Server
 }
 
 // newMCPHandler creates an MCP protocol handler
@@ -77,6 +80,13 @@ func newMCPHandler(options ...func(*mcpHandler)) *mcpHandler {
 	h.lifecycleManager.withPromptManager(h.promptManager)
 
 	return h
+}
+
+// withServer sets the server instance
+func withServer(server *Server) func(*mcpHandler) {
+	return func(h *mcpHandler) {
+		h.server = server
+	}
 }
 
 // withToolManager sets the tool manager
