@@ -2,14 +2,32 @@ package middlewares
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 
 	mcp "trpc.group/trpc-go/trpc-mcp-go"
 	"trpc.group/trpc-go/trpc-mcp-go/mcptest"
 )
 
+type SlogAdapter struct {
+	logger *slog.Logger
+}
+
+func (s *SlogAdapter) Log(fields ...interface{}) {
+	// 将 fields 转换为 slog 的字段格式
+	s.logger.Info("MCP Request Handled", fields...)
+}
+
+func NewSlogAdapter() *SlogAdapter {
+	return &SlogAdapter{
+		logger: slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+	}
+}
+
 func TestLogginMiddleware_Conformance(t *testing.T) {
-	mcptest.CheckMiddlewareFunc(t, LogginMiddleware)
+	mylogger := NewSlogAdapter()
+	mcptest.CheckMiddlewareFunc(t, newLoggingMiddleware(mylogger))
 }
 func TestLogginMiddleware(t *testing.T) {
 	//准备模拟请求，更多模拟请求样例可看jsonrpc_test.gp
@@ -24,7 +42,7 @@ func TestLogginMiddleware(t *testing.T) {
 			"arguments": map[string]interface{}{"param1": "value1"},
 		},
 	}
-
+	myLogger := NewSlogAdapter() // 使用 SlogAdapter 作为日志记录器
 	//模拟最终业务逻辑
 	finalHandlerCalled := false
 	mockFinalHandler := func(ctx context.Context, req *mcp.JSONRPCRequest, session mcp.Session) (mcp.JSONRPCMessage, error) {
@@ -41,7 +59,7 @@ func TestLogginMiddleware(t *testing.T) {
 	t.Log("开始执行中间件测试...")
 	_, err := mcptest.RunMiddlewareTest(
 		t,
-		LogginMiddleware, // 假设 LogginMiddleware 定义在同一个包中
+		newLoggingMiddleware(myLogger), // 假设 LogginMiddleware 定义在同一个包中
 		mockReq,
 		mockFinalHandler,
 	)
