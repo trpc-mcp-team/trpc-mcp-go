@@ -144,7 +144,7 @@ func (h *mcpHandler) handleRequest(ctx context.Context, req *JSONRPCRequest, ses
 	if handler, ok := dispatchTable[req.Method]; ok {
 		return handler(ctx, req, session)
 	}
-	return newJSONRPCErrorResponse(req.ID, ErrCodeMethodNotFound, "method not found", nil), nil
+	return NewJSONRPCErrorResponse(req.ID, ErrCodeMethodNotFound, "method not found", nil), nil
 }
 
 // Private methods for each case branch
