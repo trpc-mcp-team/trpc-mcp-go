@@ -141,10 +141,23 @@ func (h *mcpHandler) requestDispatchTable() map[string]requestHandlerFunc {
 // Refactored handleRequest
 func (h *mcpHandler) handleRequest(ctx context.Context, req *JSONRPCRequest, session Session) (JSONRPCMessage, error) {
 	dispatchTable := h.requestDispatchTable()
-	if handler, ok := dispatchTable[req.Method]; ok {
-		return handler(ctx, req, session)
+	originalHandler, ok := dispatchTable[req.Method]
+	if !ok {
+		return newJSONRPCErrorResponse(req.ID, ErrCodeMethodNotFound, "method not found", nil), nil
 	}
-	return newJSONRPCErrorResponse(req.ID, ErrCodeMethodNotFound, "method not found", nil), nil
+
+	// 1. Create a middleware chain from the server's middlewares.
+	var middlewares []MiddlewareFunc
+	if h.server != nil {
+		middlewares = h.server.middlewares
+	}
+	chain := NewMiddlewareChain(middlewares...)
+
+	// 2. Chain the middlewares and the final handler.
+	chainedHandler := chain.Then(HandleFunc(originalHandler))
+
+	// 3. Execute the chained handler.
+	return chainedHandler(ctx, req, session)
 }
 
 // Private methods for each case branch
