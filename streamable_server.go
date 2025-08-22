@@ -330,7 +330,7 @@ func (h *httpServerHandler) handlePostRequest(ctx context.Context, w http.Respon
 		resp, err := h.requestHandler.handleRequest(reqCtx, &req, session)
 		if err != nil {
 			h.logger.Infof("Request processing failed: %v", err)
-			errorResp := newJSONRPCErrorResponse(req.ID, ErrCodeInternal, "Internal server error", nil)
+			errorResp := NewJSONRPCErrorResponse(req.ID, ErrCodeInternal, "Internal server error", nil)
 			err = sseResponder.respond(ctx, w, r, errorResp, session)
 			if err != nil {
 				h.logger.Infof("Failed to send SSE error response: %v", err)
@@ -357,7 +357,7 @@ func (h *httpServerHandler) handlePostRequest(ctx context.Context, w http.Respon
 	resp, err := h.requestHandler.handleRequest(reqCtx, &req, session)
 	if err != nil {
 		h.logger.Infof("Request processing failed: %v", err)
-		errorResp := newJSONRPCErrorResponse(req.ID, ErrCodeInternal, "Internal server error", nil)
+		errorResp := NewJSONRPCErrorResponse(req.ID, ErrCodeInternal, "Internal server error", nil)
 		responder.respond(respCtx, w, r, errorResp, session)
 		return
 	}

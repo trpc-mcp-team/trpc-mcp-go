@@ -192,19 +192,19 @@ func (m *toolManager) handleCallTool(
 ) (JSONRPCMessage, error) {
 	// Parse request parameters
 	if req.Params == nil {
-		return newJSONRPCErrorResponse(req.ID, ErrCodeInvalidParams, errors.ErrMissingParams.Error(), nil), nil
+		return NewJSONRPCErrorResponse(req.ID, ErrCodeInvalidParams, errors.ErrMissingParams.Error(), nil), nil
 	}
 
 	// Convert params to map for easier access
 	paramsMap, ok := req.Params.(map[string]interface{})
 	if !ok {
-		return newJSONRPCErrorResponse(req.ID, ErrCodeInvalidParams, errors.ErrInvalidParams.Error(), nil), nil
+		return NewJSONRPCErrorResponse(req.ID, ErrCodeInvalidParams, errors.ErrInvalidParams.Error(), nil), nil
 	}
 
 	// Get tool name
 	toolName, ok := paramsMap["name"].(string)
 	if !ok || toolName == "" {
-		return newJSONRPCErrorResponse(req.ID, ErrCodeInvalidParams, "missing tool name", nil), nil
+		return NewJSONRPCErrorResponse(req.ID, ErrCodeInvalidParams, "missing tool name", nil), nil
 	}
 
 	// Get tool with proper locking.
@@ -213,7 +213,7 @@ func (m *toolManager) handleCallTool(
 	m.mu.RUnlock()
 
 	if !ok {
-		return newJSONRPCErrorResponse(
+		return NewJSONRPCErrorResponse(
 			req.ID,
 			ErrCodeMethodNotFound,
 			fmt.Sprintf("%v: %s", errors.ErrToolNotFound, toolName),
@@ -235,7 +235,7 @@ func (m *toolManager) handleCallTool(
 		argsMap, ok := args.(map[string]interface{})
 		if !ok {
 			errMsg := fmt.Sprintf("%v: arguments must be an object, got %T", errors.ErrInvalidParams, args)
-			return newJSONRPCErrorResponse(req.ID, ErrCodeInvalidParams, errMsg, nil), nil
+			return NewJSONRPCErrorResponse(req.ID, ErrCodeInvalidParams, errMsg, nil), nil
 		}
 		params.Arguments = argsMap
 	}
@@ -265,7 +265,7 @@ func (m *toolManager) handleCallTool(
 	result, err := registeredTool.Handler(ctx, toolReq)
 	if err != nil {
 		errMsg := fmt.Sprintf("tool execution failed (tool: %s): %v", registeredTool.Tool.Name, err)
-		return newJSONRPCErrorResponse(req.ID, ErrCodeInternal, errMsg, nil), nil
+		return NewJSONRPCErrorResponse(req.ID, ErrCodeInternal, errMsg, nil), nil
 	}
 
 	return result, nil
