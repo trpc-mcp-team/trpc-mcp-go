@@ -1,4 +1,4 @@
-package middlewares
+package logging
 
 import (
 	"bytes"
@@ -20,10 +20,14 @@ type MockLogger struct {
 	mu  sync.Mutex // 防止并发写入
 }
 
-// Log 实现了 Logger 接口。
-func (m *MockLogger) Log(fields ...interface{}) {
+func (m *MockLogger) Log(ctx context.Context, level Level, msg string, fields ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// 记录级别和消息
+	m.buf.WriteString(fmt.Sprintf("[%s] %s ", level, msg))
+
+	// 记录字段
 	for _, f := range fields {
 		m.buf.WriteString(fmt.Sprintf("%v ", f))
 	}
@@ -66,7 +70,7 @@ func TestLoggingMiddleware_WithOptions(t *testing.T) {
 
 	t.Run("ShouldLog/Default_OnlyLogsOnError", func(t *testing.T) {
 		mockLogger := &MockLogger{}
-		middleware := newLoggingMiddleware(mockLogger) // 使用默认选项
+		middleware := NewLoggingMiddleware(mockLogger) // 使用默认选项
 		// Case 1: 成功调用，不应该有日志
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, mockFinalHandler)
 		if logOutput := mockLogger.String(); logOutput != "" {
@@ -88,8 +92,8 @@ func TestLoggingMiddleware_WithOptions(t *testing.T) {
 	t.Run("ShouldLog/Custom_LogAllRequests", func(t *testing.T) {
 		mockLogger := &MockLogger{}
 		// 自定义选项：记录所有请求
-		middleware := newLoggingMiddleware(mockLogger,
-			WithShouldLog(func(duration time.Duration, err error) bool {
+		middleware := NewLoggingMiddleware(mockLogger,
+			WithShouldLog(func(level Level, duration time.Duration, err error) bool {
 				return true
 			}),
 		)
@@ -103,8 +107,8 @@ func TestLoggingMiddleware_WithOptions(t *testing.T) {
 
 	t.Run("PayloadLogging/Enabled", func(t *testing.T) {
 		mockLogger := &MockLogger{}
-		middleware := newLoggingMiddleware(mockLogger,
-			WithShouldLog(func(duration time.Duration, err error) bool { return true }), // 确保会记录日志
+		middleware := NewLoggingMiddleware(mockLogger,
+			WithShouldLog(func(level Level, duration time.Duration, err error) bool { return true }), // 确保会记录日志
 			WithPayloadLogging(true),
 		)
 
@@ -131,8 +135,8 @@ func TestLoggingMiddleware_WithOptions(t *testing.T) {
 
 	t.Run("PayloadLogging/Disabled", func(t *testing.T) {
 		mockLogger := &MockLogger{}
-		middleware := newLoggingMiddleware(mockLogger,
-			WithShouldLog(func(duration time.Duration, err error) bool { return true }),
+		middleware := NewLoggingMiddleware(mockLogger,
+			WithShouldLog(func(level Level, duration time.Duration, err error) bool { return true }),
 			WithPayloadLogging(false), // 显式禁用 (或使用默认)
 		)
 		fmt.Println("function!")
@@ -153,8 +157,8 @@ func TestLoggingMiddleware_WithOptions(t *testing.T) {
 
 	t.Run("FieldsFromContext", func(t *testing.T) {
 		mockLogger := &MockLogger{}
-		middleware := newLoggingMiddleware(mockLogger,
-			WithShouldLog(func(duration time.Duration, err error) bool { return true }),
+		middleware := NewLoggingMiddleware(mockLogger,
+			WithShouldLog(func(level Level, duration time.Duration, err error) bool { return true }),
 			WithFieldsFromContext(func(ctx context.Context) Fields {
 				if requestID, ok := ctx.Value("request_id").(string); ok {
 					return Fields{"request_id", requestID}
