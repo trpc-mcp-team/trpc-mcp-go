@@ -26,7 +26,7 @@ type MetricsRecorder interface {
 
 // MetricsConfig 自定义组件及控制指标采集的行为
 type MetricsConfig struct {
-	recorder MetricsRecorder
+	recorder MetricsRecorder // 默认内存实现
 
 	// Filter 返回 true 则对该方法采样
 	Filter func(method string) bool
@@ -37,7 +37,7 @@ type MetricsConfig struct {
 	EnableErrors   bool
 	EnableInFlight bool
 
-	Logger Logger
+	Logger Logger // 默认 GetDefaultLogger()
 }
 
 func DefaultMetricsConfig() *MetricsConfig {
