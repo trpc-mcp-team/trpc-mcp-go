@@ -12,15 +12,14 @@ import (
 	mcptest "trpc.group/trpc-go/trpc-mcp-go/mcptest"
 )
 
-// TestZapAdapterWithMiddleware 测试 ZapAdapter 与 logging 中间件的集成
+// TestZapAdapterWithMiddleware
 func TestZapAdapterWithMiddleware(t *testing.T) {
-	// 创建真实的 ZapLogger
+
 	zapLogger := log.NewZapLogger()
 
-	// 创建适配器
+	// create the Zap adapter
 	adapter := NewZapAdapter(zapLogger)
 
-	// 准备测试请求
 	mockReq := &mcp.JSONRPCRequest{
 		Request: mcp.Request{
 			Method: "tools/call",
@@ -28,29 +27,27 @@ func TestZapAdapterWithMiddleware(t *testing.T) {
 		Params: map[string]interface{}{"user": "alice"},
 	}
 
-	// 成功的 handler
 	successHandler := func(ctx context.Context, req *mcp.JSONRPCRequest, session mcp.Session) (mcp.JSONRPCMessage, error) {
 		return &mcp.JSONRPCResponse{Result: "ok"}, nil
 	}
 
-	// 失败的 handler
 	errorHandler := func(ctx context.Context, req *mcp.JSONRPCRequest, session mcp.Session) (mcp.JSONRPCMessage, error) {
 		return nil, errors.New("test error")
 	}
 
 	t.Run("Default behavior - only logs errors", func(t *testing.T) {
-		// 使用默认配置（只记录错误）
+		// default configuration: only log errors
 		middleware := logging.NewLoggingMiddleware(adapter)
 
-		// 测试成功的请求 - 不应该有日志
+		// request without error - should not log
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, successHandler)
-		// 测试失败的请求 - 应该有错误日志
+		// request with error - should log
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, errorHandler)
-		// fmt.Printf("zapLogger_with_error: %v\n", zapLogger)
+
 	})
 
 	t.Run("Custom behavior - log all requests", func(t *testing.T) {
-		// 配置记录所有请求
+		// custom configuration: log all requests
 		middleware := logging.NewLoggingMiddleware(adapter,
 			logging.WithShouldLog(func(level logging.Level, duration time.Duration, err error) bool {
 				return true
@@ -58,15 +55,14 @@ func TestZapAdapterWithMiddleware(t *testing.T) {
 			logging.WithPayloadLogging(true),
 		)
 
-		// 测试成功的请求 - 应该有日志
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, successHandler)
 
-		// 测试失败的请求 - 应该有日志
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, errorHandler)
+		// should log with or without error
 	})
 
 	t.Run("With context fields", func(t *testing.T) {
-		// 配置从 context 提取字段
+		// get custom fields from context
 		middleware := logging.NewLoggingMiddleware(adapter,
 			logging.WithShouldLog(func(level logging.Level, duration time.Duration, err error) bool {
 				return true
@@ -79,7 +75,7 @@ func TestZapAdapterWithMiddleware(t *testing.T) {
 			}),
 		)
 
-		// 创建带有 request_id 的 context
+		// create a context with a custom field
 		ctxWithRequestID := context.WithValue(context.Background(), "request_id", "test-123")
 
 		handler := func(ctx context.Context, req *mcp.JSONRPCRequest, session mcp.Session) (mcp.JSONRPCMessage, error) {
@@ -90,7 +86,7 @@ func TestZapAdapterWithMiddleware(t *testing.T) {
 	})
 }
 
-// TestZapAdapterErrorHandling 测试错误处理
+// TestZapAdapterErrorHandling
 func TestZapAdapterErrorHandling(t *testing.T) {
 	zapLogger := log.NewZapLogger()
 	adapter := NewZapAdapter(zapLogger)
@@ -102,7 +98,7 @@ func TestZapAdapterErrorHandling(t *testing.T) {
 		},
 	}
 
-	// 测试各种错误类型
+	// test various error types
 	testErrors := []struct {
 		name string
 		err  error
@@ -118,13 +114,13 @@ func TestZapAdapterErrorHandling(t *testing.T) {
 				return nil, tt.err
 			}
 
-			// 确保中间件能够处理各种错误类型而不 panic
+			// make sure the middleware handles the error without panicking
 			mcptest.RunMiddlewareTest(t, middleware, mockReq, handler)
 		})
 	}
 }
 
-// customError 自定义错误类型用于测试
+// customError
 type customError struct {
 	message string
 }

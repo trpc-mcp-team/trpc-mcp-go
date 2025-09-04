@@ -12,41 +12,31 @@ import (
 
 const (
 	ColorReset  = "\033[0m"
-	ColorRed    = "\033[31m" // ERROR
-	ColorYellow = "\033[33m" // WARN
-	ColorGreen  = "\033[32m" // INFO
-	ColorBlue   = "\033[34m" // DEBUG
-	ColorCyan   = "\033[36m" // 时间戳
-	ColorWhite  = "\033[37m" // 消息
-	ColorGray   = "\033[90m" // 字段
+	ColorRed    = "\033[31m"
+	ColorYellow = "\033[33m"
+	ColorGreen  = "\033[32m"
+	ColorBlue   = "\033[34m"
+	ColorCyan   = "\033[36m"
+	ColorWhite  = "\033[37m"
+	ColorGray   = "\033[90m"
 )
 
-// useColor 检查是否应该使用颜色输出
-var useColor = shouldUseColor()
-
 func shouldUseColor() bool {
-	// 检查各种颜色环境变量
 	if os.Getenv("CLICOLOR") == "0" {
 		return false
 	}
-
 	if os.Getenv("CLICOLOR_FORCE") == "1" || os.Getenv("FORCE_COLOR") == "1" {
 		return true
 	}
-
 	if os.Getenv("CLICOLOR") == "1" || os.Getenv("COLOR") == "1" || os.Getenv("COLOR") == "true" {
 		return isTerminal()
 	}
-
-	// 检测 COLORTERM
 	if colorterm := os.Getenv("COLORTERM"); colorterm != "" {
 		return isTerminal()
 	}
-
 	return false
 }
 
-// isTerminal 检查是否在终端中运行
 func isTerminal() bool {
 	fileInfo, _ := os.Stdout.Stat()
 	return (fileInfo.Mode() & os.ModeCharDevice) != 0
@@ -62,12 +52,9 @@ func (f LoggerFunc) Log(ctx context.Context, level Level, msg string, fields ...
 	f(ctx, level, msg, fields...)
 }
 
-// provide flexible implements for interface
-
 type Fields []interface{}
 
-// formatFields 格式化字段为更易读的字符串
-func formatFields(levelColor string, fields ...any) string {
+func formatFields(useColor bool, levelColor string, fields ...any) string {
 	if len(fields) == 0 {
 		return ""
 	}
@@ -114,8 +101,7 @@ func formatFields(levelColor string, fields ...any) string {
 	return result.String()
 }
 
-// getLevelColor 根据日志级别返回对应的颜色
-func getLevelColor(level Level) string {
+func getLevelColor(useColor bool, level Level) string {
 	if !useColor {
 		return ""
 	}
@@ -133,16 +119,15 @@ func getLevelColor(level Level) string {
 	}
 }
 
-// logWithFormat 使用格式化输出日志
-func logWithFormat(logger Logger, ctx context.Context, level Level, msg string, fields ...any) {
-	levelColor := getLevelColor(level)
+func logWithFormat(logger Logger, ctx context.Context, level Level, useColor bool, msg string, fields ...any) {
+	levelColor := getLevelColor(useColor, level)
 	var formattedMsg string
 	if useColor {
 		formattedMsg = fmt.Sprintf(" %s%s%s", levelColor, msg, ColorReset)
 	} else {
 		formattedMsg = fmt.Sprintf(" %s", msg)
 	}
-	formattedMsg += formatFields(levelColor, fields...)
+	formattedMsg += formatFields(useColor, levelColor, fields...)
 	logger.Log(ctx, level, formattedMsg)
 }
 
@@ -153,6 +138,8 @@ type options struct {
 	logPayload bool
 
 	fieldsFromCtx func(ctx context.Context) Fields
+
+	useColor bool
 }
 
 // Option is a func to change options struct
@@ -192,28 +179,35 @@ func (l Level) Enabled(level Level) bool {
 	return l >= level
 }
 
-// WithShouldLog 设置一个自定义的日志记录条件。
+// WithShouldLog setting a function to determine if a request should be logged based on level, duration, and error presence.
 func WithShouldLog(f func(level Level, duration time.Duration, err error) bool) Option {
 	return func(o *options) {
 		o.shouldLog = f
 	}
 }
 
-// WithPayloadLogging 启用或禁用对请求/响应体的日志记录。
+// WithPayloadLogging enables or disables logging of request and response payloads.
 func WithPayloadLogging(enabled bool) Option {
 	return func(o *options) {
 		o.logPayload = enabled
 	}
 }
 
-// WithFieldsFromContext 设置一个从 context 中提取字段的函数。
+// WithFieldsFromContext allows adding custom fields to logs extracted from the context.
 func WithFieldsFromContext(f func(ctx context.Context) Fields) Option {
 	return func(o *options) {
 		o.fieldsFromCtx = f
 	}
 }
 
-// 默认只记录出现错误的请求
+// WithColor enables or disables colored log output based on the provided boolean and terminal capabilities.
+func WithColor(enabled bool) Option {
+	return func(o *options) {
+		o.useColor = enabled && shouldUseColor()
+	}
+}
+
+// defaultShouldLog only logs errors by default
 var defaultShouldLog = func(level Level, duration time.Duration, err error) bool {
 	return level >= LevelError
 }
@@ -223,8 +217,9 @@ func NewLoggingMiddleware(logger Logger, opts ...Option) mcp.MiddlewareFunc {
 	o := &options{
 		shouldLog:  defaultShouldLog,
 		logPayload: false,
+		useColor:   false, // disable color by default
 	}
-	// 2. 应用所有用户传入的配置选项
+
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -255,23 +250,23 @@ func NewLoggingMiddleware(logger Logger, opts ...Option) mcp.MiddlewareFunc {
 			})
 		}
 		if o.shouldLog(LevelInfo, 0, nil) {
-			logWithFormat(logger, ctx, LevelInfo, "Request started", startFields...)
+			logWithFormat(logger, ctx, LevelInfo, o.useColor, "Request started", startFields...)
 		}
 		resp, err := next(ctx, req, session)
 		duration := time.Since(start)
 
-		// 检查是否是错误响应（处理工具执行错误被转换为响应的情况）
+		// check if there is an error (either traditional error or JSON-RPC error)
 		var hasError bool
 		var errorMessage string
 		var errorType string
 
 		if err != nil {
-			// 传统错误
+			// traditional error
 			hasError = true
 			errorMessage = err.Error()
 			errorType = fmt.Sprintf("%T", err)
 		} else if resp != nil {
-			// 检查是否是错误响应
+			// check for JSON-RPC error in the response
 			if errorResp, ok := resp.(*mcp.JSONRPCError); ok {
 				hasError = true
 				errorMessage = errorResp.Error.Message
@@ -282,7 +277,7 @@ func NewLoggingMiddleware(logger Logger, opts ...Option) mcp.MiddlewareFunc {
 			}
 		}
 
-		// 决定是否记录日志
+		// determine if we should log based on error presence and custom logic
 		shouldLogError := hasError && o.shouldLog(LevelError, duration, err)
 		shouldLogSuccess := !hasError && o.shouldLog(LevelInfo, duration, err)
 
@@ -318,10 +313,10 @@ func NewLoggingMiddleware(logger Logger, opts ...Option) mcp.MiddlewareFunc {
 					"type":    errorType,
 				},
 			)
-			logWithFormat(logger, ctx, LevelError, "Request failed", errorFields...)
+			logWithFormat(logger, ctx, LevelError, o.useColor, "Request failed", errorFields...)
 		} else {
 			// stage4: finish log
-			logWithFormat(logger, ctx, LevelInfo, "Request completed", resultFields...)
+			logWithFormat(logger, ctx, LevelInfo, o.useColor, "Request completed", resultFields...)
 		}
 
 		return resp, err

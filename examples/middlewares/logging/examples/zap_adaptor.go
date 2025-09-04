@@ -33,7 +33,7 @@ func NewZapAdapter(zapLogger *log.ZapLogger) logging.Logger {
 		case logging.LevelFatal:
 			zapLogger.Fatal(args...)
 		default:
-			// 未知级别默认使用 Info
+			// use Info by default
 			zapLogger.Info(args...)
 		}
 	})
