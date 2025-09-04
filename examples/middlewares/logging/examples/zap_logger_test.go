@@ -7,9 +7,9 @@ import (
 	"time"
 
 	mcp "trpc.group/trpc-go/trpc-mcp-go"
+	"trpc.group/trpc-go/trpc-mcp-go/examples/middlewares/logging"
 	"trpc.group/trpc-go/trpc-mcp-go/internal/log"
 	mcptest "trpc.group/trpc-go/trpc-mcp-go/mcptest"
-	"trpc.group/trpc-go/trpc-mcp-go/middlewares/logging"
 )
 
 // TestZapAdapterWithMiddleware 测试 ZapAdapter 与 logging 中间件的集成
@@ -44,8 +44,6 @@ func TestZapAdapterWithMiddleware(t *testing.T) {
 
 		// 测试成功的请求 - 不应该有日志
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, successHandler)
-		//fmt.Printf("zapLogger: %v\n", zapLogger)
-
 		// 测试失败的请求 - 应该有错误日志
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, errorHandler)
 		// fmt.Printf("zapLogger_with_error: %v\n", zapLogger)

@@ -3,8 +3,8 @@ package examples
 import (
 	"context"
 
+	"trpc.group/trpc-go/trpc-mcp-go/examples/middlewares/logging"
 	"trpc.group/trpc-go/trpc-mcp-go/internal/log"
-	"trpc.group/trpc-go/trpc-mcp-go/middlewares/logging"
 )
 
 func NewZapAdapter(zapLogger *log.ZapLogger) logging.Logger {

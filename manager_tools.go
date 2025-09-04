@@ -9,7 +9,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"trpc.group/trpc-go/trpc-mcp-go/internal/errors"
@@ -162,17 +161,17 @@ func (m *toolManager) handleListTools(
 	session Session,
 ) (JSONRPCMessage, error) {
 	// Log request and context for debugging
-	log.Printf("=== ListTools Request ===")
-	log.Printf("Context type: %T", ctx)
-	log.Printf("Context value: %v", ctx)
-	if deadline, ok := ctx.Deadline(); ok {
-		log.Printf("Context deadline: %v", deadline)
-	}
-	log.Printf("Context done: %v", ctx.Done())
-	log.Printf("Request type: %T", req)
-	log.Printf("Request: %+v", req)
-	log.Printf("Request.Params: %+v", req.Params)
-	log.Printf("Session: %+v", session)
+	// log.Printf("=== ListTools Request ===")
+	// log.Printf("Context type: %T", ctx)
+	// log.Printf("Context value: %v", ctx)
+	// if deadline, ok := ctx.Deadline(); ok {
+	// 	log.Printf("Context deadline: %v", deadline)
+	// }
+	// log.Printf("Context done: %v", ctx.Done())
+	// log.Printf("Request type: %T", req)
+	// log.Printf("Request: %+v", req)
+	// log.Printf("Request.Params: %+v", req.Params)
+	// log.Printf("Session: %+v", session)
 
 	// Get all tools
 	toolPtrs := m.getTools("")
@@ -204,18 +203,18 @@ func (m *toolManager) handleCallTool(
 	req *JSONRPCRequest,
 	session Session,
 ) (JSONRPCMessage, error) {
-	// Log request and context for debugging
-	log.Printf("=== CallTool Request ===")
-	log.Printf("Context type: %T", ctx)
-	log.Printf("Context value: %v", ctx)
-	if deadline, ok := ctx.Deadline(); ok {
-		log.Printf("Context deadline: %v", deadline)
-	}
-	log.Printf("Context done: %v", ctx.Done())
-	log.Printf("Request type: %T", req)
-	log.Printf("Request: %+v", req)
-	log.Printf("Request.Params: %+v", req.Params)
-	log.Printf("Session: %+v", session)
+	// // Log request and context for debugging
+	// log.Printf("=== CallTool Request ===")
+	// log.Printf("Context type: %T", ctx)
+	// log.Printf("Context value: %v", ctx)
+	// if deadline, ok := ctx.Deadline(); ok {
+	// 	log.Printf("Context deadline: %v", deadline)
+	// }
+	// log.Printf("Context done: %v", ctx.Done())
+	// log.Printf("Request type: %T", req)
+	// log.Printf("Request: %+v", req)
+	// log.Printf("Request.Params: %+v", req.Params)
+	// log.Printf("Session: %+v", session)
 
 	// Parse request parameters
 	if req.Params == nil {
