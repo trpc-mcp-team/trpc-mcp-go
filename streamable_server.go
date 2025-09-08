@@ -330,7 +330,16 @@ func (h *httpServerHandler) handlePostRequest(ctx context.Context, w http.Respon
 		resp, err := h.requestHandler.handleRequest(reqCtx, &req, session)
 		if err != nil {
 			h.logger.Infof("Request processing failed: %v", err)
-			errorResp := newJSONRPCErrorResponse(req.ID, ErrCodeInternal, "Internal server error", nil)
+			errorResp := NewJSONRPCErrorResponse(req.ID, ErrCodeInternal, "Internal server error", nil)
+			err = sseResponder.respond(ctx, w, r, errorResp, session)
+			if err != nil {
+				h.logger.Infof("Failed to send SSE error response: %v", err)
+			}
+			return
+		}
+		// Check if the response from the handler is already an error response.
+		// If so, send it directly instead of wrapping it in a result.
+		if errorResp, ok := resp.(*JSONRPCError); ok {
 			err = sseResponder.respond(ctx, w, r, errorResp, session)
 			if err != nil {
 				h.logger.Infof("Failed to send SSE error response: %v", err)
@@ -357,7 +366,13 @@ func (h *httpServerHandler) handlePostRequest(ctx context.Context, w http.Respon
 	resp, err := h.requestHandler.handleRequest(reqCtx, &req, session)
 	if err != nil {
 		h.logger.Infof("Request processing failed: %v", err)
-		errorResp := newJSONRPCErrorResponse(req.ID, ErrCodeInternal, "Internal server error", nil)
+		errorResp := NewJSONRPCErrorResponse(req.ID, ErrCodeInternal, "Internal server error", nil)
+		responder.respond(respCtx, w, r, errorResp, session)
+		return
+	}
+	// Check if the response from the handler is already an error response.
+	// If so, send it directly instead of wrapping it in a result.
+	if errorResp, ok := resp.(*JSONRPCError); ok {
 		responder.respond(respCtx, w, r, errorResp, session)
 		return
 	}

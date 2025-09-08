@@ -143,7 +143,7 @@ func (h *mcpHandler) handleRequest(ctx context.Context, req *JSONRPCRequest, ses
 	dispatchTable := h.requestDispatchTable()
 	originalHandler, ok := dispatchTable[req.Method]
 	if !ok {
-		return newJSONRPCErrorResponse(req.ID, ErrCodeMethodNotFound, "method not found", nil), nil
+		return NewJSONRPCErrorResponse(req.ID, ErrCodeMethodNotFound, "method not found", nil), nil
 	}
 
 	// 1. Create a middleware chain from the server's middlewares.
