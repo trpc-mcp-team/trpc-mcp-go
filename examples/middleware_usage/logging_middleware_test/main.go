@@ -13,7 +13,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	mcp "trpc.group/trpc-go/trpc-mcp-go"
-	"trpc.group/trpc-go/trpc-mcp-go/examples/middlewares/logging"
+	"trpc.group/trpc-go/trpc-mcp-go/examples/middlewares"
 )
 
 // MockLogger is a simple logger implementation for testing
@@ -22,7 +22,7 @@ type MockLogger struct {
 	mu  sync.Mutex
 }
 
-func (m *MockLogger) Log(ctx context.Context, level logging.Level, msg string, fields ...any) {
+func (m *MockLogger) Log(ctx context.Context, level middlewares.Level, msg string, fields ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
@@ -69,21 +69,21 @@ func main() {
 
 	mockLogger := &MockLogger{}
 
-	advancedLoggingMiddleware := logging.NewLoggingMiddleware(
+	advancedLoggingMiddleware := middlewares.NewLoggingMiddleware(
 		mockLogger,
-		logging.WithShouldLog(func(level logging.Level, duration time.Duration, err error) bool {
+		middlewares.WithShouldLog(func(level middlewares.Level, duration time.Duration, err error) bool {
 			// logging all requests for demonstration
 			return true
 		}),
-		logging.WithPayloadLogging(true),
-		logging.WithFieldsFromContext(func(ctx context.Context) logging.Fields {
-			return logging.Fields{
+		middlewares.WithPayloadLogging(true),
+		middlewares.WithFieldsFromContext(func(ctx context.Context) middlewares.Fields {
+			return middlewares.Fields{
 				"test.source", "integration-test",
 				"test.timestamp", time.Now().Unix(),
 			}
 
 		}),
-		logging.WithColor(true),
+		middlewares.WithColor(true),
 	)
 
 	// create server
