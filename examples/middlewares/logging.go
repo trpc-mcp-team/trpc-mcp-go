@@ -42,17 +42,7 @@ func isTerminal() bool {
 	return (fileInfo.Mode() & os.ModeCharDevice) != 0
 }
 
-type Logger interface {
-	Log(ctx context.Context, level Level, msg string, fields ...any)
-}
-
-type LoggerFunc func(ctx context.Context, level Level, msg string, fields ...any)
-
-func (f LoggerFunc) Log(ctx context.Context, level Level, msg string, fields ...any) {
-	f(ctx, level, msg, fields...)
-}
-
-type Fields []interface{}
+type Fields []interface{};
 
 func formatFields(useColor bool, levelColor string, fields ...any) string {
 	if len(fields) == 0 {
@@ -119,16 +109,31 @@ func getLevelColor(useColor bool, level Level) string {
 	}
 }
 
-func logWithFormat(logger Logger, ctx context.Context, level Level, useColor bool, msg string, fields ...any) {
+func logWithFormat(logger mcp.Logger, ctx context.Context, level Level, useColor bool, msg string, fields ...any) {
 	levelColor := getLevelColor(useColor, level)
-	var formattedMsg string
+	var formattedMsg strings.Builder
 	if useColor {
-		formattedMsg = fmt.Sprintf(" %s%s%s", levelColor, msg, ColorReset)
+		formattedMsg.WriteString(fmt.Sprintf(" %s[%s]%s", levelColor, level.String(), ColorReset))
+		formattedMsg.WriteString(fmt.Sprintf(" %s%s%s", levelColor, msg, ColorReset))
 	} else {
-		formattedMsg = fmt.Sprintf(" %s", msg)
+		formattedMsg.WriteString(fmt.Sprintf(" [%s]", level.String()))
+		formattedMsg.WriteString(fmt.Sprintf(" %s", msg))
 	}
-	formattedMsg += formatFields(useColor, levelColor, fields...)
-	logger.Log(ctx, level, formattedMsg)
+	formattedMsg.WriteString(formatFields(useColor, levelColor, fields...))
+	switch level {
+	case LevelDebug:
+		logger.Debug(formattedMsg.String())
+	case LevelInfo:
+		logger.Info(formattedMsg.String())
+	case LevelWarn:
+		logger.Warn(formattedMsg.String())
+	case LevelError:
+		logger.Error(formattedMsg.String())
+	case LevelFatal:
+		logger.Fatal(formattedMsg.String())
+	default:
+		logger.Info(formattedMsg.String()) // Default to Info for unknown levels
+	}
 }
 
 // options structure preserve all configurable options
@@ -212,7 +217,7 @@ var defaultShouldLog = func(level Level, duration time.Duration, err error) bool
 	return level >= LevelError
 }
 
-func NewLoggingMiddleware(logger Logger, opts ...Option) mcp.MiddlewareFunc {
+func NewLoggingMiddleware(logger mcp.Logger, opts ...Option) mcp.MiddlewareFunc {
 	// 初始化默认配置
 	o := &options{
 		shouldLog:  defaultShouldLog,

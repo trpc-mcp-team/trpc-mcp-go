@@ -16,24 +16,50 @@ import (
 	"trpc.group/trpc-go/trpc-mcp-go/examples/middlewares"
 )
 
-// MockLogger is a simple logger implementation for testing
+// MockLogger is a simple logger implementation for testing that satisfies the mcp.Logger interface.
 type MockLogger struct {
 	buf bytes.Buffer
 	mu  sync.Mutex
 }
 
-func (m *MockLogger) Log(ctx context.Context, level middlewares.Level, msg string, fields ...any) {
+// logf is a helper to format and write log messages to the buffer.
+func (m *MockLogger) logf(level string, format string, args ...interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	msg := fmt.Sprintf(format, args...)
+	m.buf.WriteString(fmt.Sprintf("[%s] [%s] %s\n", timestamp, level, msg))
+}
 
-	// logging format: [timestamp] [level] message fields...
-	m.buf.WriteString(fmt.Sprintf("[%s] [%s] %s ", timestamp, level, msg))
+// log is a helper for unformatted log messages.
+func (m *MockLogger) log(level string, args ...interface{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	msg := fmt.Sprint(args...)
+	m.buf.WriteString(fmt.Sprintf("[%s] [%s] %s\n", timestamp, level, msg))
+}
 
-	for _, f := range fields {
-		m.buf.WriteString(fmt.Sprintf("%v ", f))
-	}
-	m.buf.WriteString("\n")
+// Implementation of mcp.Logger interface
+func (m *MockLogger) Debug(args ...interface{})                 { m.log("DEBUG", args...)
+}
+func (m *MockLogger) Debugf(format string, args ...interface{}) { m.logf("DEBUG", format, args...)
+}
+func (m *MockLogger) Info(args ...interface{})                  { m.log("INFO", args...)
+}
+func (m *MockLogger) Infof(format string, args ...interface{})  { m.logf("INFO", format, args...)
+}
+func (m *MockLogger) Warn(args ...interface{})                  { m.log("WARN", args...)
+}
+func (m *MockLogger) Warnf(format string, args ...interface{})  { m.logf("WARN", format, args...)
+}
+func (m *MockLogger) Error(args ...interface{})                 { m.log("ERROR", args...)
+}
+func (m *MockLogger) Errorf(format string, args ...interface{}) { m.logf("ERROR", format, args...)
+}
+func (m *MockLogger) Fatal(args ...interface{})                 { m.log("FATAL", args...)
+}
+func (m *MockLogger) Fatalf(format string, args ...interface{}) { m.logf("FATAL", format, args...)
 }
 
 func (m *MockLogger) String() string {
