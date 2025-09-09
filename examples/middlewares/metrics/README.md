@@ -24,7 +24,7 @@ import (
     "context"
 
     mcp "trpc.group/trpc-go/trpc-mcp-go"
-    metricmw "trpc.group/trpc-go/trpc-mcp-go/examples/middlewares/metric"
+    metricmw "trpc.group/trpc-go/trpc-mcp-go/examples/middlewares/metrics"
 )
 
 func main() {

@@ -4,7 +4,7 @@
 //
 // trpc-mcp-go is licensed under the Apache License Version 2.0.
 
-package metric
+package metrics
 
 import (
 	"context"
@@ -39,7 +39,7 @@ const (
 	ExporterOTLP OtelExporterType = "otlp"
 )
 
-// MetricsRecorder is an abstraction over metric reporting used by the middleware.
+// MetricsRecorder is an abstraction over metrics reporting used by the middleware.
 // Implementations MUST be safe for concurrent use by multiple goroutines.
 //
 // The reference implementation in this package uses OpenTelemetry, but users can
@@ -82,7 +82,7 @@ type MetricsConfig struct {
 }
 
 // DefaultMetricsConfig returns a minimally useful configuration suitable for
-// most example scenarios: all metric families enabled and no filter.
+// most example scenarios: all metrics families enabled and no filter.
 func DefaultMetricsConfig() *MetricsConfig {
 	return &MetricsConfig{
 		EnableRequests: true,
@@ -165,7 +165,7 @@ func initMeterProvider(ctx context.Context, res *resource.Resource, exporterType
 	case ExporterStdout:
 		metricExporter, err = stdoutmetric.New(stdoutmetric.WithPrettyPrint())
 		if err != nil {
-			return nil, fmt.Errorf("failed to create stdout metric exporter: %w", err)
+			return nil, fmt.Errorf("failed to create stdout metrics exporter: %w", err)
 		}
 	case ExporterOTLP:
 		conn, err := initConn(endpoint)
@@ -175,7 +175,7 @@ func initMeterProvider(ctx context.Context, res *resource.Resource, exporterType
 
 		metricExporter, err = otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
 		if err != nil {
-			return nil, fmt.Errorf("failed to create metric exporter: %w", err)
+			return nil, fmt.Errorf("failed to create metrics exporter: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported exporter type: %s", exporterType)
@@ -207,7 +207,7 @@ type RecorderConfig struct {
 // Adjust serviceName, exporterType, and endpoint as appropriate for your setup.
 func OtelMetricsRecorderConfig() *RecorderConfig {
 	return &RecorderConfig{
-		serviceName:  "trpc-mcp-go/examples/middlewares/metric",
+		serviceName:  "trpc-mcp-go/examples/middlewares/metrics",
 		exporterType: ExporterStdout,
 		endpoint:     "localhost:4317",
 	}
@@ -239,7 +239,7 @@ func WithRecorderEndpoint(endpoint string) RecorderOption {
 }
 
 // OtelMetricsRecorder is a MetricsRecorder implemented using OpenTelemetry.
-// It reports the following metric instruments with low-cardinality attributes:
+// It reports the following metrics instruments with low-cardinality attributes:
 //   - mcp_requests_total (counter): total requests by method
 //   - mcp_errors_total (counter): total errors by method and code
 //   - mcp_request_duration_ms (histogram): request latency in milliseconds by method
@@ -281,7 +281,7 @@ func NewOtelMetricsRecorder(option ...RecorderOption) (MetricsRecorder, func(ctx
 		return nil, nil, err
 	}
 
-	name := "github.com/trpc-group/trpc-mcp-go/examples/middlewares/metric"
+	name := "github.com/trpc-group/trpc-mcp-go/examples/middlewares/metrics"
 	meter := otel.Meter(name)
 
 	requestCounter, _ := meter.Int64Counter("mcp_requests_total", metric.WithDescription("Total number of MCP requests"))
@@ -317,7 +317,7 @@ func (r *OtelMetricsRecorder) RecordError(ctx context.Context, method string, co
 }
 
 // RecordLatency records the latency (in milliseconds) for the given method.
-// The metric name encodes the unit (ms). Keep histogram bucket policy consistent
+// The metrics name encodes the unit (ms). Keep histogram bucket policy consistent
 // across services to simplify fleet-wide dashboards.
 func (r *OtelMetricsRecorder) RecordLatency(ctx context.Context, method string, latencyMs float64) {
 	attrs := []attribute.KeyValue{
