@@ -1,4 +1,4 @@
-# MCP Metrics Middleware (example)
+# MCP Metrics Middleware
 
 This directory contains a minimal, production-minded example of a metrics middleware for MCP (JSON-RPC) servers implemented with `trpc-mcp-go`. It demonstrates how to collect core performance signals with OpenTelemetry and attach them to the request lifecycle via a middleware.
 
