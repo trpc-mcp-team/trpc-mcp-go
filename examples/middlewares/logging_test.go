@@ -14,26 +14,42 @@ import (
 	"trpc.group/trpc-go/trpc-mcp-go/mcptest"
 )
 
-// MockLogger 是一个用于测试的 logger 实现。
+// MockLogger is a test implementation of mcp.Logger.
 type MockLogger struct {
 	buf bytes.Buffer
-	mu  sync.Mutex // 防止并发写入
+	mu  sync.Mutex
 }
 
-func (m *MockLogger) Log(ctx context.Context, level Level, msg string, fields ...any) {
+// log is an internal helper to prevent concurrent writes.
+func (m *MockLogger) log(level string, message string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// 记录级别和消息
-	m.buf.WriteString(fmt.Sprintf("[%s] %s ", level, msg))
-
-	// 记录字段
-	for _, f := range fields {
-		m.buf.WriteString(fmt.Sprintf("%v ", f))
-	}
-	m.buf.WriteString("\n")
+	m.buf.WriteString(fmt.Sprintf("[%s] %s\n", level, message))
 }
 
+// Implement the mcp.Logger interface
+func (m *MockLogger) Debug(args ...interface{}) { m.log("DEBUG", fmt.Sprint(args...)) }
+func (m *MockLogger) Debugf(format string, args ...interface{}) {
+	m.log("DEBUG", fmt.Sprintf(format, args...))
+}
+func (m *MockLogger) Info(args ...interface{}) { m.log("INFO", fmt.Sprint(args...)) }
+func (m *MockLogger) Infof(format string, args ...interface{}) {
+	m.log("INFO", fmt.Sprintf(format, args...))
+}
+func (m *MockLogger) Warn(args ...interface{}) { m.log("WARN", fmt.Sprint(args...)) }
+func (m *MockLogger) Warnf(format string, args ...interface{}) {
+	m.log("WARN", fmt.Sprintf(format, args...))
+}
+func (m *MockLogger) Error(args ...interface{}) { m.log("ERROR", fmt.Sprint(args...)) }
+func (m *MockLogger) Errorf(format string, args ...interface{}) {
+	m.log("ERROR", fmt.Sprintf(format, args...))
+}
+func (m *MockLogger) Fatal(args ...interface{}) { m.log("FATAL", fmt.Sprint(args...)) }
+func (m *MockLogger) Fatalf(format string, args ...interface{}) {
+	m.log("FATAL", fmt.Sprintf(format, args...))
+}
+
+// Helper methods for testing
 func (m *MockLogger) String() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -51,11 +67,8 @@ func (m *MockLogger) Contains(sub string) bool {
 }
 
 func TestLoggingMiddleware_WithOptions(t *testing.T) {
-	// 准备通用的 mock 请求和 handler
 	mockReq := &mcp.JSONRPCRequest{
-		Request: mcp.Request{
-			Method: "tools/call",
-		},
+		Request: mcp.Request{Method: "tools/call"},
 	}
 
 	mockFinalHandler := func(ctx context.Context, req *mcp.JSONRPCRequest, session mcp.Session) (mcp.JSONRPCMessage, error) {
@@ -66,70 +79,58 @@ func TestLoggingMiddleware_WithOptions(t *testing.T) {
 		return nil, errors.New("something went wrong")
 	}
 
-	// === 子测试开始 ===
-
 	t.Run("ShouldLog/Default_OnlyLogsOnError", func(t *testing.T) {
 		mockLogger := &MockLogger{}
-		middleware := NewLoggingMiddleware(mockLogger) // 使用默认选项
-		// Case 1: 成功调用，不应该有日志
+		middleware := NewLoggingMiddleware(mockLogger)
+		// Case 1: Success, should not log
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, mockFinalHandler)
 		if logOutput := mockLogger.String(); logOutput != "" {
-			t.Errorf("默认配置下，成功的请求不应产生日志，但收到了: %s", logOutput)
+			t.Errorf("default config should not log successful requests, but got: %s", logOutput)
 		}
 
 		mockLogger.Reset()
-		fmt.Println(mockLogger)
 
-		// Case 2: 失败调用，应该有日志
+		// Case 2: Failure, should log
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, mockErrorHandler)
-		if !mockLogger.Contains("error something went wrong") {
-			t.Errorf("默认配置下，失败的请求应该产生错误日志，但没有找到相关内容。日志为: %s", mockLogger.String())
+		if !mockLogger.Contains("Request failed") || !mockLogger.Contains("something went wrong") {
+			t.Errorf("default config should log failed requests, but did not. Log: %s", mockLogger.String())
 		}
-		fmt.Println("----------------------------------------------------------")
-		fmt.Println(mockLogger)
 	})
 
 	t.Run("ShouldLog/Custom_LogAllRequests", func(t *testing.T) {
 		mockLogger := &MockLogger{}
-		// 自定义选项：记录所有请求
 		middleware := NewLoggingMiddleware(mockLogger,
 			WithShouldLog(func(level Level, duration time.Duration, err error) bool {
 				return true
 			}),
 		)
-		// 成功的请求也应该有日志
-		fmt.Println("function!")
 		mcptest.RunMiddlewareTest(t, middleware, mockReq, mockFinalHandler)
-		if !mockLogger.Contains("method tools/call") {
-			t.Errorf("配置为记录所有请求时，成功的请求也应该产生日志，但没有。日志为: %s", mockLogger.String())
+		if !mockLogger.Contains("Request completed") {
+			t.Errorf("custom config to log all requests did not log a successful one. Log: %s", mockLogger.String())
 		}
 	})
 
 	t.Run("PayloadLogging/Enabled", func(t *testing.T) {
 		mockLogger := &MockLogger{}
 		middleware := NewLoggingMiddleware(mockLogger,
-			WithShouldLog(func(level Level, duration time.Duration, err error) bool { return true }), // 确保会记录日志
+			WithShouldLog(func(level Level, duration time.Duration, err error) bool { return true }),
 			WithPayloadLogging(true),
 		)
 
-		// 准备一个带参数的请求
 		reqWithParams := &mcp.JSONRPCRequest{
-			Request: mcp.Request{
-				Method: "tools/call",
-			},
-			Params: map[string]interface{}{"user": "alice"},
+			Request: mcp.Request{Method: "tools/call"},
+			Params:  map[string]interface{}{"user": "alice"},
 		}
 
 		mcptest.RunMiddlewareTest(t, middleware, reqWithParams, mockFinalHandler)
 
 		logOutput := mockLogger.String()
-		// 检查日志中是否包含了请求和响应的内容
-		fmt.Println(logOutput)
-		if !strings.Contains(logOutput, "trpc.request.content") || !strings.Contains(logOutput, "user:alice") {
-			t.Errorf("启用 PayloadLogging 后，日志应包含请求内容，但没有找到。日志为: %s", logOutput)
+		// ULTIMATE FIX: Check for exact formatting from the logger.
+		if !strings.Contains(logOutput, "params: map[user:alice]") {
+			t.Errorf("PayloadLogging enabled but request payload not found. Log: %s", logOutput)
 		}
-		if !strings.Contains(logOutput, "trpc.response.content") || !strings.Contains(logOutput, "ok") {
-			t.Errorf("启用 PayloadLogging 后，日志应包含响应内容，但没有找到。日志为: %s", logOutput)
+		if !strings.Contains(logOutput, "result: ok") {
+			t.Errorf("PayloadLogging enabled but response payload not found. Log: %s", logOutput)
 		}
 	})
 
@@ -137,21 +138,18 @@ func TestLoggingMiddleware_WithOptions(t *testing.T) {
 		mockLogger := &MockLogger{}
 		middleware := NewLoggingMiddleware(mockLogger,
 			WithShouldLog(func(level Level, duration time.Duration, err error) bool { return true }),
-			WithPayloadLogging(false), // 显式禁用 (或使用默认)
+			WithPayloadLogging(false),
 		)
-		fmt.Println("function!")
 		reqWithParams := &mcp.JSONRPCRequest{
-			Request: mcp.Request{
-				Method: "tools/call",
-			},
-			Params: map[string]interface{}{"user": "alice"},
+			Request: mcp.Request{Method: "tools/call"},
+			Params:  map[string]interface{}{"user": "alice"},
 		}
 
 		mcptest.RunMiddlewareTest(t, middleware, reqWithParams, mockFinalHandler)
 
 		logOutput := mockLogger.String()
-		if strings.Contains(logOutput, "grpc.request.content") || strings.Contains(logOutput, "user:alice") {
-			t.Errorf("禁用 PayloadLogging 后，日志不应包含请求内容，但却找到了。日志为: %s", logOutput)
+		if strings.Contains(logOutput, "request: {") {
+			t.Errorf("PayloadLogging disabled but request payload was found. Log: %s", logOutput)
 		}
 	})
 
@@ -162,28 +160,24 @@ func TestLoggingMiddleware_WithOptions(t *testing.T) {
 			WithFieldsFromContext(func(ctx context.Context) Fields {
 				if requestID, ok := ctx.Value("request_id").(string); ok {
 					return Fields{"request_id", requestID}
-					//测试中间件的自定义函数截取ctx内容的功能
 				}
 				return nil
 			}),
 		)
 
-		// 准备一个带有自定义值的 context
 		ctxWithField := context.WithValue(context.Background(), "request_id", "xyz-123")
 
 		finalHandler := func(ctx context.Context, req *mcp.JSONRPCRequest, session mcp.Session) (mcp.JSONRPCMessage, error) {
-			// 可以在这里检查 context 是否被正确传递
 			if ctx.Value("request_id") != "xyz-123" {
-				t.Error("context 没有被正确传递到 final handler")
+				t.Error("context was not passed correctly to the final handler")
 			}
 			return &mcp.JSONRPCResponse{Result: "ok"}, nil
 		}
 
-		// 手动执行中间件
 		middleware(ctxWithField, mockReq, nil, finalHandler)
 
-		if !mockLogger.Contains("request_id xyz-123") {
-			t.Errorf("预期日志中包含从 context 提取的字段 'request_id'，但没有找到。日志为: %s", mockLogger.String())
+		if !mockLogger.Contains("request_id") || !mockLogger.Contains("xyz-123") {
+			t.Errorf("expected log to contain field from context, but it was not found. Log: %s", mockLogger.String())
 		}
 	})
 }
