@@ -309,6 +309,50 @@ client, err := mcp.NewClient(
 | `WithClientPath` | Set custom client path | Server path |
 | `WithHTTPReqHandler` | Use custom HTTP request handler | Default handler |
 
+## Middleware
+
+The library ships with a lightweight, framework-agnostic middleware system using an onion model.
+- Define middlewares as functions that receive (ctx, req, session, next)
+- Compose them with mcp.NewMiddlewareChain(mw1, mw2, ...).Then(final)
+- Execution enters from the outermost middleware and unwinds in LIFO order, which is ideal for pre/post logic (e.g., in-flight counters, timers).
+
+Examples
+- See examples/middlewares/ for several ready-to-use middlewares (e.g., metrics). They’re illustrative and optional.
+- You can implement your own middleware by following the MiddlewareFunc signature below.
+
+Custom middleware
+```go
+// MiddlewareFunc processes a request and passes control to the next handler in the chain.
+// Return your JSONRPCMessage and error; you may short-circuit by not calling next.
+type MiddlewareFunc func(ctx context.Context, req *mcp.JSONRPCRequest, session mcp.Session, next mcp.HandleFunc) (mcp.JSONRPCMessage, error)
+
+// Example: simple logging middleware (pseudo-code)
+func NewLoggingMiddleware(logger *log.Logger) mcp.MiddlewareFunc {
+    return func(ctx context.Context, req *mcp.JSONRPCRequest, s mcp.Session, next mcp.HandleFunc) (mcp.JSONRPCMessage, error) {
+        start := time.Now()
+        resp, err := next(ctx, req, s)
+        logger.Printf("method=%s cost=%s err=%v", req.Method, time.Since(start), err)
+        return resp, err
+    }
+}
+```
+
+Quick example
+
+```go
+// Create middleware chain
+chain := mcp.NewMiddlewareChain(mw1, mw2)
+
+// Wrap your final handler
+handler := chain.Then(func(ctx context.Context, req *mcp.JSONRPCRequest, s mcp.Session) (mcp.JSONRPCMessage, error) {
+    // ... handle request ...
+    return &mcp.JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: "ok"}, nil
+})
+
+// Pass `handler` to your server wiring
+```
+
+
 ## Advanced Features
 
 ### Streaming Progress with SSE
